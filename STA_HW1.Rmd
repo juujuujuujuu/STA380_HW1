@@ -1,0 +1,405 @@
+---
+title: "STA380-HW1 Graves,He,Yu,Zhu"
+output: html_document
+---
+##PartA & PartB
+
+
+##Exploratory Analysis: Green /Buildings
+
+
+Because the on-staff guru did not account for other variables that may have contributed to the rise in the median rent price, there is the possibility of incorrectly concluding that a green certification will lead to the increase in rent price by $2.60 per square foot. After some exploratory data analysis, we found that an important variable affecting price that was not being controlled for was the quality classification of a building. It turns out that the classification of a building has a positive effect on rent price, with class A buildings having a higher median and mean price than the other classes. Although class A buildings comprise only 40% of the entire data set, they comprise 80% of green certified buildings which may have skewed the data observed by the on-staff guru. In effect, the increase in the median price of rent was likely due to in large part to the high proportion of class A buildings in the subset of green buildings. If the classification of a building is controlled for, then the results of median and mean of the data differ significantly from the guru???s initial findings.
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE)
+green_buildings=read.csv("greenbuildings.csv")
+library(mosaic)
+library(fImport)
+library(foreach)
+```
+
+The median of buildings that are not Class A is $23.50
+```{r, echo=FALSE}
+summary(subset(green_buildings,class_a==0)$Rent)
+```
+The median of buildings that are Class A is $28.20. 
+```{r,echo=FALSE}
+summary(subset(green_buildings,class_a==1)$Rent)
+```
+
+
+
+Class A buildings have a median rent price per square foot that is $4.70 higher than other buildings. Thus, an increase in rent due to classification likely had an effect on the guru's observation of an increase in rent due to green certification.
+
+
+
+**Contingency Table: Number of Green Certified Buildings that are Class A**   
+This table shows that the majority of green-certified buildings are class A buildings. Out of 685 total green-certified buildings, 546 are classified as class A buildings.
+```{r,echo=FALSE}
+xtabs(~green_rating + class_a, data=green_buildings)
+```
+
+
+**Contingency Table: Proporation of Green Buildings that are Class A**   
+As indicated by this proportion table, Class A buildings comprise about 80% of all green-certified buildings.
+```{r,echo=FALSE}
+{table_a=xtabs(~green_rating + class_a, data=green_buildings)
+prop.table(table_a,margin=1)}
+
+
+```
+
+
+**Effect of Green Rating and Classification on Rent**   
+These two box plots are designed to show to that both green certification and the classification of a building have a similar positive effect on rent. This is important to show that classification should be observed and controlled in order to show the true effects of a green rating on rent price.
+```{r,echo=FALSE}
+par(mfrow = c(1, 2))
+boxplot(Rent ~ green_rating, data=green_buildings,ylim=c(0,75),xlab="Green Rating",ylab="Rent", main="Green Rating vs Rent")
+boxplot(Rent ~ class_a, data=green_buildings,ylim=c(0,75),xlab="Class A",ylab="Rent",main="Class vs Rent")
+```
+
+
+**Effect of Green Certification on Class A Buildings**   
+As can be observed by the summary statistics and the box plot below, Green Rating does not have as great as effect on rent as the guru concluded when the classification of an "A" building is controlled for.
+
+```{r,echo=FALSE}
+classA=subset(green_buildings,class_a==1)
+boxplot(Rent~green_rating,data=classA, xlab="Green Rating",ylab="Rent",main="Effect of Green Certification on Rent for Class A Buildings",ylim=c(0,75))
+
+```
+
+Median of Class A building rent without green certification: $28.20
+```{r,echo=FALSE}
+median(subset(green_buildings,class_a==1 & green_rating==0)$Rent)
+
+```
+Median of Class A building rent with green certification: $28.44
+```{r,echo=FALSE}
+median(subset(green_buildings,class_a==1 & green_rating==1)$Rent)
+
+```
+
+
+
+In conclusion, we do not believe the guru was correct in concluding that being green certified will automatically lead to a $2.60 per square foot increase in rent price and subsequently basing all of his profit estimates on this number. Classification of a building is a significant factor that should to be considered when calculating the potential increased profits of becoming green certified. If a building is considered class A, the increased rent price per square foot is only expected to increase by $0.24 which may not be worth the costs for the company (this number is based on the median prices of rent; if we are to look at the mean, rent price is actually expected to decrease by $1.60). 
+
+
+
+##Bootstrapping
+
+###0  Preparation
+We import daily return data of the five assets from Yahoo Finance. The start date is 2004-12-01, which is almost the earliest date to retrieve available data for all the five assets.
+
+Then we introduce a helper function for calculating daily returns from Yahoo price series.
+
+
+```{r,echo=FALSE}
+# Import a few stocks
+mystocks = c("SPY", "TLT", "LQD","EEM","VNQ")
+myprices = yahooSeries(mystocks, from='2004-12-01', to='2016-07-30')
+
+# A helper function for calculating percentage returns from a Yahoo Series
+YahooPricesToReturns = function(series) {
+	mycols = grep('Adj.Close', colnames(series))
+	closingprice = series[,mycols]
+	N = nrow(closingprice)
+	percentreturn = as.data.frame(closingprice[2:N,]) / as.data.frame(closingprice[1:(N-1),]) - 1
+	mynames = strsplit(colnames(percentreturn), '.', fixed=TRUE)
+	mynames = lapply(mynames, function(x) return(paste0(x[1], ".PctReturn")))
+	colnames(percentreturn) = mynames
+	as.matrix(na.omit(percentreturn))
+}
+
+# Compute the returns from the closing prices
+myreturns = YahooPricesToReturns(myprices)
+```
+
+###1  Marshal appropriate evidence to characterize the risk/return properties of the five major asset classes.
+
+
+There are sevreal factors that we can look into in order to characterize the risk/return properties of the five major asset classes.
+
+
+* **Plots of Daily Returns on Time Series**
+
+
+We use S&P500 performance as an indicator of market performance. Also, return on 20+ year US treasury bond is treated as risk free rate in our comparison and calculation.
+
+We can see from the following plots that returns of LQD are less volatile than EEM and VNQ. The fluctuation range of EEM is wider than VNQ. We may conclude that LQD has lower risk and thus lower return. While emerging markets and real estate are more vulnerable, EEM and VNQ are riskier and will generate high returns.
+
+20-year US Treasury bonds can generally be seen as risk free assets. They are very safe and have stable low returns. 
+
+S&P 500 can be set as a good benchmark to capture the market performance. It has moderate risk and returns.
+```{r,echo=FALSE}
+par(mfrow=c(1,3))
+plot(myreturns[,3], type='l',xlab="2004-2016",ylab="Daily Return_LQD")
+plot(myreturns[,4], type='l',xlab="2004-2016",ylab="Daily Return_EEM")
+plot(myreturns[,5], type='l',xlab="2004-2016",ylab="Daily Return_VNQ")
+
+par(mfrow=c(1,2))
+# Look at the market returns over time
+plot(myreturns[,1], type='l',xlab="2004-2016",ylab="Market Return_SP500")
+# risk free return
+plot(myreturns[,2], type='l',xlab="2004-2016",ylab="Risk Free Return_Tbond")
+```
+
+
+* **Mean and Standard Deviation**
+
+
+Mean and standard deviation of returns respectively represent the asset's overall return and risk during a certain period of time. 
+
+From the table below, we find that LQD seems even safer than the T bond.VNQ has the highest risk and return because real estate has large exposure to macro economy. Emerging market equities is more volatile in comparison with S&P500 and yields higher returns, which is not surprising.
+
+We also calculate the mean and sd of return premium of each assets over risk free rates for the sharpe ratio calculation.
+```{r,echo=FALSE}
+# calculate market premium using TLT as risk free rate and S&P500 as market rate.
+myreturns=transform(myreturns,market.premium=SPY.PctReturn-TLT.PctReturn)
+myreturns=transform(myreturns,LQD.premium=LQD.PctReturn-TLT.PctReturn)
+myreturns=transform(myreturns,EEM.premium=EEM.PctReturn-TLT.PctReturn)
+myreturns=transform(myreturns,VNQ.premium=VNQ.PctReturn-TLT.PctReturn)
+
+# calculate mean and standard diaviation of daily return on each asset
+Mean=sapply(myreturns,mean)
+SD=sapply(myreturns,sd)
+mean.sd=cbind(Mean,SD)
+```
+
+* **Sharp Ratio**
+
+
+Sharpe ratio measures average return earned in excess of the risk-free rate per unit of volatility. It's a risk adjusted return.
+
+We see a negative sharpe ratio of LQD due to its negative excess return in comparison with T bond.Among the remaining three, S&P500 has the lowest excess return per unit of risk, while VNQ again, got the highest sharp ratio.
+
+```{r,echo=FALSE}
+#Sharpe Ratio
+SP_market=mean.sd[6,1]/mean.sd[1,2]
+SP_LQD=mean.sd[7,1]/mean.sd[3,2]
+SP_EEM=mean.sd[8,1]/mean.sd[4,2]
+SP_VNQ=mean.sd[9,1]/mean.sd[5,2]
+```
+
+* **CAPM Alpha and Beta**
+* **Beta**: It is the sensitivity of an asset's excess return to the excess market return.
+* **Alpha**: Alpha coefficient indicates how an investment has performed after accounting for the risk it involved:
+alpha<0: the investment has earned too little for its risk; 
+alpha=0: the investment has earned a return adequate for the risk taken;
+alpha>0: the investment has a return in excess of the reward for the assumed risk.
+
+SPY clearly has a beta of 1 as SPY return serves as the market return based on our assumption. 
+
+From the results below, LQD is not very sensitive to the market performance and earned less for its risk. VNQ and EEM are more volatile than the market as they both have betas above 1. EEM is 26% more volative than market, while VNQ is 15% more volatile than market.
+They also have positive alphas, which shows that they have returns in excess of the reward for the assumed risk.
+
+```{r,echo=FALSE}
+# First fit the CAPM model to each stock
+lm_LQD = lm(myreturns[,7] ~ myreturns[,6])
+summary(lm_LQD)
+
+lm_EEM = lm(myreturns[,8] ~ myreturns[,6])
+summary(lm_EEM)
+
+lm_VNQ = lm(myreturns[,9] ~ myreturns[,6])
+summary(lm_VNQ)
+
+# The estimated alpha and beta for each stock based on daily returns
+coef(lm_LQD); coef(lm_EEM);coef(lm_VNQ)
+```
+
+
+###2 Outlines your choice of the "safe" and "aggressive" portfolios.
+
+**1. Safe Portfolio**
+
+We choose S&P 500, T bond and investment grade corporate bond for the safe portfolio as they have relatively lower risk when compared to the other two. S&P500 and investment grade corporate bond are given 30% weights each.T bond weighs 40% in the portfolio. 
+
+**2. Aggressive Portfolio**
+
+Risky assets should be included in this portfolio. Thus, we put 50% EEM and 50% VNQ in it.
+
+###3 Monte Carlo Simulation
+Use bootstrap resampling to estimate the 4-week (20 trading day) value at risk of each of your three portfolios at the 5% level.
+
+**1. Evenly Split Portfolio**
+```{r,echo=FALSE}
+# Delete return premium columns
+myreturns$market.premium=NULL
+myreturns$LQD.premium=NULL
+myreturns$EEM.premium=NULL
+myreturns$VNQ.premium=NULL
+
+# Sample a random return from the empirical joint distribution
+# This simulates a random day
+my_favorite_seed = 1234567
+set.seed(my_favorite_seed)
+return.today = resample(myreturns, 1, orig.ids=FALSE)
+
+
+# Update the value of your holdings
+total_wealth = 100000
+holdings = total_wealth*c(0.2,0.2,0.2, 0.2, 0.2)
+holdings = holdings + holdings*return.today
+
+# Compute your new total wealth
+totalwealth = sum(holdings)
+
+# Now simulate many different possible trading years!
+sim1 = foreach(i=1:5000, .combine='rbind') %do% {
+  totalwealth = 100000
+  weights = c(0.2, 0.2, 0.2, 0.2, 0.2)
+  holdings = weights * totalwealth
+  n_days = 20
+  wealthtracker = rep(0, n_days) # Set up a placeholder to track total wealth
+  for(today in 1:n_days) {
+    return.today = resample(myreturns, 1, orig.ids=FALSE)
+    holdings = holdings + holdings*return.today
+    totalwealth = sum(holdings)
+    wealthtracker[today] = totalwealth
+  }
+  wealthtracker
+}
+
+
+# Calculate 5% value at risk
+quantile(sim1[,n_days], 0.05) - 100000
+
+```
+
+**2. Safe Portfolio**
+```{r,echo=FALSE}
+safereturns=subset(myreturns, select=c("SPY.PctReturn","TLT.PctReturn","LQD.PctReturn"))
+
+# Sample a random return from the empirical joint distribution
+# This simulates a random day
+my_favorite_seed = 1234567
+set.seed(my_favorite_seed)
+return.today = resample(safereturns, 1, orig.ids=FALSE)
+
+# Update the value of your holdings
+total_wealth = 100000
+holdings = total_wealth*c(0.3,0.4,0.3)
+holdings = holdings + holdings*return.today
+
+# Compute your new total wealth
+totalwealth = sum(holdings)
+
+# Now simulate many different possible trading years!
+sim2 = foreach(i=1:5000, .combine='rbind') %do% {
+  totalwealth = 100000
+  weights = c(0.3,0.4,0.3)
+  holdings = weights * totalwealth
+  n_days = 20
+  wealthtracker = rep(0, n_days) # Set up a placeholder to track total wealth
+  for(today in 1:n_days) {
+    return.today = resample(safereturns, 1, orig.ids=FALSE)
+    holdings = holdings + holdings*return.today
+    totalwealth = sum(holdings)
+    wealthtracker[today] = totalwealth
+  }
+  wealthtracker
+}
+
+# Calculate 5% value at risk
+quantile(sim2[,n_days], 0.05) - 100000
+
+```
+
+**3. Agressive Portfolio**
+```{r,echo=FALSE}
+aggreturns=subset(myreturns, select=c("EEM.PctReturn","VNQ.PctReturn"))
+
+# Sample a random return from the empirical joint distribution
+# This simulates a random day
+my_favorite_seed = 1234567
+set.seed(my_favorite_seed)
+return.today = resample(aggreturns, 1, orig.ids=FALSE)
+
+# Update the value of your holdings
+total_wealth = 100000
+holdings = total_wealth*c(0.5,0.5)
+holdings = holdings + holdings*return.today
+
+# Compute your new total wealth
+totalwealth = sum(holdings)
+
+# Now simulate many different possible trading years!
+sim3 = foreach(i=1:5000, .combine='rbind') %do% {
+  totalwealth = 100000
+  weights = c(0.5,0.5)
+  holdings = weights * totalwealth
+  n_days = 20
+  wealthtracker = rep(0, n_days) # Set up a placeholder to track total wealth
+  for(today in 1:n_days) {
+    return.today = resample(aggreturns, 1, orig.ids=FALSE)
+    holdings = holdings + holdings*return.today
+    totalwealth = sum(holdings)
+    wealthtracker[today] = totalwealth
+  }
+  wealthtracker
+}
+
+# Calculate 5% value at risk
+quantile(sim3[,n_days], 0.05) - 100000
+```
+
+###4 Compare the results for each portfolio in a way that would allow the reader to make an intelligent decision among the three options.
+
+
+* **Total Wealth Histogrm**
+
+
+The following histograms compare total wealth after 20 trading days. Evenly split portfolio containing all five assets flunctuates between $90,000 and $120,000. Safe portfolio has the narrowest wealth range, from $95,000 to 110,000. Aggressive porfolio is the most volatile one among the three, with wealth after 20 trading days widely distributed from $70,000 to $14,000.
+
+```{r,echo=FALSE}
+#total wealth after 20 trading days
+par(mfrow=c(1,3))
+hist(sim1[,n_days], 25,xlab = 'total wealth, after 20 trading days',main ='Evenly Split Portfolio',col = 'navy')
+hist(sim2[,n_days], 25,xlab = 'total wealth, after 20 trading days',main ='Safe Portfolio',col = 'lightblue')
+hist(sim3[,n_days], 25,xlab = 'total wealth, after 20 trading days',main ='Aggressive  Portfolio',col = 'purple')
+```
+
+
+
+* **Profit/Loss Histogram**
+
+
+The same trend can be observed from the profit/loss histogram. Aggressive portfolio is risky and volatile, thus have the highest profit/loss. Safe porfolio is the opposite of aggresive portfolio, thus got moderate profit/loss.
+
+```{r,echo=FALSE}
+# Profit/loss
+par(mfrow=c(1,3))
+hist(sim1[,n_days]- 100000,xlab = 'Profit/Loss, after 20 trading days',main ='Evenly Split Portfolio',col = 'navy')
+hist(sim2[,n_days]- 100000,xlab = 'Profit/Loss, after 20 trading days',main ='Safe Portfolio',col = 'lightblue')
+hist(sim3[,n_days]- 100000,xlab = 'Profit/Loss, after 20 trading days',main ='Aggressive Portfolio',col = 'purple')
+```
+
+* **Mean and Variance**
+
+
+Mean and variance of portfolio returns respectively reflect the return level and risk level.
+The results below are in accordance with the histogram results that were presented above.
+
+
+
+```{r,echo=FALSE}
+mean.evenly=mean(sim1[,20])
+mean.safe=mean(sim2[,20])
+mean.aggressive=mean(sim3[,20])
+cbind(mean.evenly,mean.safe,mean.aggressive)
+
+sd.evenly=sd(sim1[,20])
+sd.safe=sd(sim2[,20])
+sd.aggressive=sd(sim3[,20])
+cbind(sd.evenly,sd.safe,sd.aggressive)
+```
+
+
+* **Investment suggestion**
+
+
+Risk averse investors may be interseted in the safe portfolio, while risk appetite investor will want to invest in the aggressive portfolio.
+
+
+
